@@ -1,0 +1,201 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int        @id @default(autoincrement())
+  name      String     @db.NVarChar(100)
+  email     String     @unique @db.NVarChar(320)
+  password  String     @db.NVarChar(200)
+  avatar    String?    @db.NVarChar(500) // Profil resmi
+  bio       String?    @db.NVarChar(500) // Kısa biyografi
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @default(now()) @updatedAt @map("updated_at")
+  
+  // İlişkiler
+  articles  Article[]  @relation("UserArticles")
+  roles     UserRole[]
+  publications PublicationAccess[]
+  badges    UserBadge[]
+  tokens    AccessToken[]
+  purchaseRequests PurchaseRequest[]
+  digitalTokens DigitalAccessToken[]
+}
+
+model Role {
+  id          Int        @id @default(autoincrement())
+  name        String     @unique @db.NVarChar(50)
+  description String?    @db.NVarChar(200)
+  permissions String     @db.NVarChar(Max) // JSON string of permissions
+  color       String?    @db.NVarChar(7) // Hex color for badges
+  icon        String?    @db.NVarChar(50) // Icon name
+  createdAt   DateTime   @default(now()) @map("created_at")
+  
+  // İlişkiler
+  users UserRole[]
+}
+
+model UserRole {
+  id     Int  @id @default(autoincrement())
+  userId Int
+  roleId Int
+  assignedAt DateTime @default(now()) @map("assigned_at")
+  
+  // İlişkiler
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, roleId])
+}
+
+// Rozet Sistemi
+model Badge {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.NVarChar(100)
+  description String?  @db.NVarChar(300)
+  icon        String   @db.NVarChar(100) // Icon name
+  color       String   @db.NVarChar(7) // Hex color
+  category    String   @db.NVarChar(50) // "achievement", "role", "special"
+  rarity      String   @default("common") @db.NVarChar(20) // "common", "rare", "epic", "legendary"
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  // İlişkiler
+  users UserBadge[]
+}
+
+model UserBadge {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  badgeId   Int
+  earnedAt  DateTime @default(now()) @map("earned_at")
+  expiresAt DateTime? // Bazı rozetler geçici olabilir
+  
+  // İlişkiler
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge  Badge  @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, badgeId])
+}
+
+// Token Sistemi - Dergi Erişimi
+model AccessToken {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  publicationId Int
+  token       String   @unique @db.NVarChar(500) // JWT token
+  permissions String   @db.NVarChar(Max) // JSON string of permissions
+  expiresAt   DateTime
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  // İlişkiler
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  publication Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, publicationId])
+}
+
+model Article {
+  id        Int      @id @default(autoincrement())
+  title     String   @db.NVarChar(200)
+  content   String   @db.NVarChar(Max)
+  authorId  Int
+  status    String   @default("draft") @db.NVarChar(20)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  
+  // İlişkiler
+  author    User     @relation("UserArticles", fields: [authorId], references: [id])
+}
+
+// Dijital Dergi Sistemi
+model Publication {
+  id          Int      @id @default(autoincrement())
+  title       String   @db.NVarChar(200)
+  description String?  @db.NVarChar(500)
+  type        String   @db.NVarChar(50) // "magazine", "mini_series"
+  issue       String?  @db.NVarChar(50) // "Sayı 1", "Seri A" gibi
+  pageCount   Int      @default(0)
+  fileKey     String   @db.NVarChar(500) // Flipbook dosya yolu
+  coverImage  String?  @db.NVarChar(500) // Kapak resmi
+  isPublic    Boolean  @default(false)
+  publishedAt DateTime? // Yayın tarihi
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+  
+  // İlişkiler
+  access      PublicationAccess[]
+  tokens      AccessToken[]
+  purchaseRequests PurchaseRequest[]
+  digitalTokens DigitalAccessToken[]
+  template    FlipbookTemplate? @relation(fields: [templateId], references: [id])
+  templateId  Int?
+}
+
+// Flipbook Template - Tekrar kullanılabilir yapı
+model FlipbookTemplate {
+  id          Int      @id @default(autoincrement())
+  name        String   @db.NVarChar(200)
+  description String?  @db.NVarChar(500)
+  baseFile    String   @db.NVarChar(500) // Temel flipbook dosyası
+  config      String?  @db.NVarChar(Max) // JSON config
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  // İlişkiler
+  publications Publication[]
+}
+
+// Kullanıcı Erişim Hakları
+model PublicationAccess {
+  id             Int         @id @default(autoincrement())
+  userId         Int
+  publicationId  Int
+  accessType     String      @db.NVarChar(50) // "read", "download", "admin"
+  grantedAt      DateTime    @default(now()) @map("granted_at")
+  expiresAt      DateTime?   // Erişim süresi
+  
+  // İlişkiler
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  publication   Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, publicationId])
+}
+
+// Satın Alma Sistemi
+model PurchaseRequest {
+  id             Int         @id @default(autoincrement())
+  userId         Int
+  publicationId  Int
+  status         String      @default("pending") @db.NVarChar(20) // "pending", "approved", "rejected"
+  paymentMethod  String?     @db.NVarChar(50) // "credit_card", "bank_transfer", "cash"
+  amount         Decimal?    @db.Decimal(10, 2)
+  notes          String?     @db.NVarChar(500)
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @default(now()) @updatedAt @map("updated_at")
+  
+  // İlişkiler
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  publication   Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+}
+
+// Dijital Erişim Token'ları
+model DigitalAccessToken {
+  id             Int         @id @default(autoincrement())
+  userId         Int
+  publicationId  Int
+  token          String      @unique @db.NVarChar(500)
+  accessType     String      @db.NVarChar(50) // "read", "download", "full"
+  expiresAt      DateTime?
+  isActive       Boolean     @default(true)
+  createdAt      DateTime    @default(now()) @map("created_at")
+  
+  // İlişkiler
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  publication   Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, publicationId])
+}
