@@ -1,0 +1,2 @@
+{"_id":"pP7d9NtZMkzc5p4a","email":"sezinsu.uysal@gmail.com","role":"admin","passhash":"$2a$10$ebvwHc6ea7nbnrW7xisGO.2FL9SEPW4X1Itp88qB5Evr9NJHxeucG","createdDate":{"$$date":1756575015752},"modifiedDate":{"$$date":1756575048627},"signupDate":{"$$date":1756575048627}}
+{"$$indexCreated":{"fieldName":"email","unique":true,"sparse":false}}
